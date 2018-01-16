@@ -1,13 +1,13 @@
-package io.suppie.lcs.rl.environment.action
+package io.suppie.lcs.rl.environment
 
-import java.{lang, lang => jl}
+import java.{lang => jl}
 
-sealed trait Action {
+trait Action extends Serializable {
   def probability: jl.Double
 }
 
-case class StochasticAction(probability: jl.Double = 1.0) extends Action
+class StochasticAction(val probability: jl.Double = 1.0) extends Action
 
-case object DeterministicAction extends Action {
-  override def probability: lang.Double = 1.0
+class DeterministicAction() extends Action {
+  override def probability: jl.Double = 1.0
 }
