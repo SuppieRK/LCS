@@ -6,18 +6,14 @@ import io.suppie.lcs.rl.environment.Belief
 
 trait FitnessPolicy {
   final def compare(b: Belief, newProps: ju.HashMap[String, jl.Double]): jl.Double = {
-    if (b == null || newProps == null || ((b.identifier == null) && (newProps == null))) {
-      0.0
-    } else {
-      iCompare(b, newProps)
-    }
+    if (b == null || b.identifier == null || newProps == null) 0.0 else internalCompare(b, newProps)
   }
 
-  protected def iCompare(b: Belief, newProps: ju.HashMap[String, jl.Double]): jl.Double
+  protected def internalCompare(b: Belief, newProps: ju.HashMap[String, jl.Double]): jl.Double
 }
 
 object StrictFitnessPolicy extends FitnessPolicy {
-  override protected def iCompare(b: Belief, newProps: ju.HashMap[String, jl.Double]): jl.Double = {
-    if (b.identifier != null && b.identifier.equals(newProps)) 100.0 else 0.0
+  override protected def internalCompare(b: Belief, newProps: ju.HashMap[String, jl.Double]): jl.Double = {
+    if (b.identifier.equals(newProps)) 100.0 else 0.0
   }
 }

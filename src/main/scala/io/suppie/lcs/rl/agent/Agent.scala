@@ -2,7 +2,7 @@ package io.suppie.lcs.rl.agent
 
 import java.{util => ju}
 
-import io.suppie.lcs.rl.environment.{Action, State}
+import io.suppie.lcs.rl.environment.Action
 
 trait Agent[T <: java.io.Serializable] extends java.io.Serializable {
   def getPolicy: ju.HashMap[T, Action]

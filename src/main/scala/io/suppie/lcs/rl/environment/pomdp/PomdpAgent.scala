@@ -8,6 +8,7 @@ import io.suppie.lcs.rl.environment._
 
 import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.util.Try
 
 case class PomdpAgent(
                        envExecutor: PomdpEnvironmentExecutor,
@@ -26,8 +27,13 @@ case class PomdpAgent(
 
   private def generatePolicy: ju.HashMap[ju.HashMap[String, jl.Double], Action] = {
     validate()
-    train()
 
+    // Training stage
+    0 to episodesAmount foreach { epoch =>
+      traverse(TraceableState(findOrPutBelief(envExecutor.getAndSetRandomState)))
+    }
+
+    // Generate policy for extraction
     val result: ju.HashMap[ju.HashMap[String, jl.Double], Action] = new ju.HashMap
 
     exploredSpace.foreach(outer => {
@@ -35,12 +41,6 @@ case class PomdpAgent(
     })
 
     result
-  }
-
-  private def train(): Unit = {
-    0 to episodesAmount foreach { epoch =>
-      traverse(TraceableState(findOrPutBelief(envExecutor.getAndSetRandomState)))
-    }
   }
 
   @tailrec
@@ -65,9 +65,7 @@ case class PomdpAgent(
       val newBelief: Belief = findOrPutBelief(newObservation)
 
       // Figure out the consequence for update
-      val consequence: RichConsequence = if (exploredSpace(currentBelief).contains(newBelief)) {
-        exploredSpace(currentBelief)(newBelief)
-      } else {
+      val consequence: RichConsequence = Try(exploredSpace(currentBelief)(newBelief)) getOrElse {
         val c = RichConsequence(newConsequence)
         exploredSpace(currentBelief).put(newBelief, c)
         c
@@ -76,11 +74,7 @@ case class PomdpAgent(
       // Update quality
       val r: jl.Double = consequence.reward
       val q: jl.Double = consequence.quality
-      val e: jl.Double = if (exploredSpace(newBelief).nonEmpty) {
-        Option(exploredSpace(newBelief).maxBy(_._2.estimate)._2.estimate).getOrElse(0.0)
-      } else {
-        0.0
-      }
+      val e: jl.Double = Try(exploredSpace(newBelief).maxBy(_._2.estimate)._2.estimate).getOrElse(0.0)
       val lr: jl.Double = learningRate
       val df: jl.Double = discountFactor
 
@@ -115,11 +109,7 @@ case class PomdpAgent(
           exploredSpace.put(belief, mutable.Map())
           belief
         } else {
-          val foundBelief = Option(researchedBeliefs.maxBy(_._2)._1)
-
-          if (foundBelief.isDefined) {
-            foundBelief.get
-          } else {
+          Try(researchedBeliefs.maxBy(_._2)._1) getOrElse {
             val belief: Belief = Belief(observation)
             exploredSpace.put(belief, mutable.Map())
             belief

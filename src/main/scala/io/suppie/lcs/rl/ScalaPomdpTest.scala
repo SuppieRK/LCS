@@ -54,12 +54,6 @@ case class TestExecutor() extends PomdpEnvironmentExecutor {
 
   var currentState: ju.HashMap[String, jl.Double] = a0.newState
 
-  private def makeSingletonMap(key: String, value: jl.Double): ju.HashMap[String, jl.Double] = {
-    val result: ju.HashMap[String, jl.Double] = new ju.HashMap[String, jl.Double]()
-    result.put(key, value)
-    result
-  }
-
   override def doAction(action: Action): Consequence = action match {
     case ta: TestAction =>
       currentState = ta.newState
@@ -78,4 +72,10 @@ case class TestExecutor() extends PomdpEnvironmentExecutor {
   override def isCurrentStateGoal: jl.Boolean = goalStates.contains(currentState)
 
   override def getAvailableActions: List[Action] = environment(currentState)
+
+  private def makeSingletonMap(key: String, value: jl.Double): ju.HashMap[String, jl.Double] = {
+    val result: ju.HashMap[String, jl.Double] = new ju.HashMap[String, jl.Double]()
+    result.put(key, value)
+    result
+  }
 }
