@@ -1,14 +1,14 @@
 package io.suppie.lcs.zdavep
 
 /**
- * MMC-specific genetic algorithm values and functions
- */
+  * MMC-specific genetic algorithm values and functions
+  */
 package object mmc {
-  import genetic._, Genetic._
-  import scala.util.Random._
 
-  // Round a decimal
-  def round(v: Double): Double = BigDecimal(v).setScale(2, BigDecimal.RoundingMode.HALF_UP).toDouble
+  import genetic._
+  import Genetic._
+
+  import scala.util.Random._
 
   // Create a series of coin combinations
   private val pool = for {
@@ -18,7 +18,10 @@ package object mmc {
     p <- 0 to Penny.max
   } yield List(
     Change(q, Quarter), Change(d, Dime), Change(n, Nickel), Change(p, Penny)
-  )
+  )  // Round a decimal
+  def round(v: Double): Double = BigDecimal(v).setScale(2, BigDecimal.RoundingMode.HALF_UP).toDouble
+
+
 
   // Choose a random integer within a given range
   private def randInt(h: Int, l: Int = 0) = math.floor(nextDouble * (h - l)).toInt + l

@@ -3,13 +3,14 @@ package io.suppie.lcs.zdavep.tsp
 import io.suppie.lcs.zdavep.genetic
 
 /**
- * Traveling salesman problem example.
- */
+  * Traveling salesman problem example.
+  */
 object Main extends App {
 
   // Read a tsp file from CLI. Use a default file if not provided.
   implicit val tspFileReader = new TspFileReader {
     val tspFile = if (args.length >= 1) args(0).trim else "cities.tsp"
+
     override def readLines: List[String] = scala.io.Source.fromFile(tspFile).getLines().toList
   }
 

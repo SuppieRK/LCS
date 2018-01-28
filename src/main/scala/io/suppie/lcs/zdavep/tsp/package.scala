@@ -1,10 +1,13 @@
 package io.suppie.lcs.zdavep
 
 /**
- * TSP-specific genetic algorithm values and functions
- */
+  * TSP-specific genetic algorithm values and functions
+  */
 package object tsp {
-  import genetic._, Genetic._
+
+  import genetic._
+  import Genetic._
+
   import scala.annotation.tailrec
   import scala.util.Random.nextDouble
 
@@ -20,9 +23,6 @@ package object tsp {
   // TSP mutation rate
   private final val MUTATE_RATE = 0.1D
 
-  // Choose a random integer within a given range
-  private def randInt(h: Int, l: Int = 0) = math.floor(nextDouble * (h - l)).toInt + l
-
   // Great circle distance function (assumes earth is a sphere)
   def distance(c1: City, c2: City): Double = {
     val p1 = c1.lat * PI_RADS_PER_180_DEG
@@ -31,7 +31,8 @@ package object tsp {
     val p4 = math.sin(p1) * math.sin(p2)
     val p5 = math.cos(p1) * math.cos(p2) * math.cos(p3)
     RADIUS_EARTH * math.acos(p4 + p5)
-  }
+  }  // Choose a random integer within a given range
+  private def randInt(h: Int, l: Int = 0) = math.floor(nextDouble * (h - l)).toInt + l
 
   // Given a city, find it's nearest neighbor
   private def findNearest(city: City, list: List[City]): City =
@@ -45,8 +46,11 @@ package object tsp {
       nearestNeighbor(nearest, src.filterNot(_ == nearest), dest :+ c)
     }
 
+
+
   // TSP genotype - represents the search space of possible tours (lists of cities)
   implicit def tspGenotype(implicit r: TspFileReader): Genotype[City] = new Genotype[City] {
+
     import scala.util.Random.shuffle
 
     private val genePool = r.readLines.map { line =>
@@ -66,6 +70,7 @@ package object tsp {
       case h :: t => if (t.isEmpty) acc else calc(t, acc + distance(h, t.head))
       case Nil => acc
     }
+
     def fitness(c: Chromosome[City]): Double = calc(c, distance(c.last, c.head))
   }
 

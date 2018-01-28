@@ -1,7 +1,6 @@
 package io.suppie.lcs.zdavep.mmc
 
 import io.suppie.lcs.zdavep.genetic
-import io.suppie.lcs.zdavep.genetic.Genetic.Chromosome
 
 /**
   * Minimize make change example.

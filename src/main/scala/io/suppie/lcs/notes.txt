@@ -1,0 +1,16 @@
+LCS workflow:
+
+Consists of two main stages:
+1. Exploitation - using known set of rules during event processing
+2. Exploration - altering known set of rules to explore new possibilities
+
+Exploitation can be split onto several stages:
+1. Environmental sensors acquire new data or events from environment
+2. Rules for which the condition matches the input event are searched and extracted from current population
+3. A new rule is created if no matches is found in existing population - also known as covering.
+4. The chosen rules are ranked by their fitness values and the rules with the highest predicted outcome are used to trigger the action.
+
+Exploration phase is triggered after taking an action and consists of:
+5. Once the action is performed, the system rewards the rules for which the action has been executed. RL module assigns credits to executed rules.
+6. Rewards are used to update the rule fitness, applying evolutionary constraints to the existing population.
+7. The genetic algorithm updates the existing population of rules by using genetic operators, such as crossover and mutation.
