@@ -1,18 +1,17 @@
 package io.suppie.lcs.test
 
+import java.text.NumberFormat
+
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
 import scala.util.control.Breaks._
 
 object Utils {
-  def negate(bit: Boolean): Boolean = !bit
-
   def negate(bit: Byte): Byte = if (bit == 1) 0 else 1
 
-  def bitSetToNum(input: String): Array[Byte] = input.map(_.toByte).toArray
-
   def targetFunction(input: String): Int = {
-    val bytes = bitSetToNum(input)
+    val bytes = input.map(ch => if (ch == '0') 0.byteValue() else 1.byteValue())
+
     negate(bytes(0)) * negate(bytes(1)) * bytes(2) +
       negate(bytes(0)) * bytes(1) * bytes(3) +
       bytes(0) * negate(bytes(1)) * bytes(4) +
@@ -184,7 +183,7 @@ object Utils {
     val i = population(Random.nextInt(population.length))
     var j = population(Random.nextInt(population.length))
 
-    while(i == j) {
+    while (i == j) {
       j = population(Random.nextInt(population.length))
     }
 
@@ -321,9 +320,7 @@ object Utils {
   }
 
   def testModel(system: ArrayBuffer[Classifier], numTrials: Int = 50): Int = {
-    var correct = 0
-
-    0 until numTrials foreach {i =>
+    val correct = (0 until numTrials).map{ i =>
       val input = randomBitString()
 
       val matchSet = system.filter(c => doesMatch(input, c.condition))
@@ -333,11 +330,13 @@ object Utils {
       val action = selectAction(predArray)
 
       if (targetFunction(input) == action) {
-        correct += 1
+        1
+      } else {
+        0
       }
-    }
+    }.sum
 
-    println(s"Done! Classified correctly ${correct / numTrials}")
+    println(s"Done! Classified correctly ${(correct.toDouble / numTrials.toDouble).asPercentage}")
 
     correct
   }
@@ -345,11 +344,15 @@ object Utils {
   def main(args: Array[String]): Unit = {
     val system = trainModel(
       populationSize = 200,
-      maxGenerations = 5000,
+      maxGenerations = 10000,
       actions = Array(0, 1),
       gaFreq = 25.0)
 
     testModel(system)
+  }
+
+  implicit class DoubleAsPercentage(d: Double) {
+    def asPercentage: String = NumberFormat.getPercentInstance.format(d)
   }
 }
 
