@@ -2,56 +2,39 @@ package io.suppie.lcs
 
 import java.util.concurrent.ThreadLocalRandom
 
-object MultiplexerProvider {
-  def main(args: Array[String]): Unit = {
-    val multiplexerOrder: Int = 32
-    val repeatTimes: Int = 100
-
-    0 until repeatTimes foreach { i =>
-      val input = generateRandomMultiplexerSignal(multiplexerOrder)
-      println(s"The signal is $input and the result is ${targetFunction(input, multiplexerOrder)}")
-    }
-  }
-
+/**
+  * The provider for multiplexers
+  *
+  * @param multiplexerOrder The order of the multiplexer
+  */
+case class MultiplexerProvider(multiplexerOrder: Int = 4) {
   /**
     * Generates random signal for multiplexer
     *
-    * @param multiplexerOrder The order of the multiplexer
     * @return The signal represented by string
     */
-  def generateRandomMultiplexerSignal(multiplexerOrder: Int = 4): String = {
+  def generateRandomMultiplexerSignal: String = {
     require(isPowerOfTwo(multiplexerOrder), "Multiplexer order must be the power of two")
 
     val requiredInputLength = multiplexerOrder + findThePowerOfTwo(multiplexerOrder)
+    val rng = ThreadLocalRandom.current()
 
-    val result = ThreadLocalRandom.current()
-      .nextLong((Math.pow(2, requiredInputLength) - 1).toLong)
-      .toBinaryString
-
-    if (result.length < requiredInputLength) {
-      "0" * (requiredInputLength - result.length) + result
-    } else {
-      result
-    }
+    (0 until requiredInputLength).map { i =>
+      if (rng.nextDouble() > 0.5) 1 else 0
+    }.mkString
   }
 
   /**
     * Multiplexer target function calculation
     *
-    * @param input            The input multiplexer value represented by binary string
-    * @param multiplexerOrder The order of the current multiplexer
+    * @param input The input multiplexer value represented by binary string
     * @return The result value of the binary multiplexer
     */
-  def targetFunction(input: String, multiplexerOrder: Int = 4): Boolean = {
+  def targetFunction(input: String): Boolean = {
     require(isPowerOfTwo(multiplexerOrder), "Multiplexer order must be the power of two")
-
     val requiredInputLength = multiplexerOrder + findThePowerOfTwo(multiplexerOrder)
-
     require(input.length == requiredInputLength, s"Input length for given multiplexer order of $multiplexerOrder must be $requiredInputLength")
-
-    createMultiplexers(multiplexerOrder).zipWithIndex.map { e =>
-      multiplicate(e._1, e._2, input)
-    }.reduceLeft(_ | _).toBoolean
+    createMultiplexers(multiplexerOrder).zipWithIndex.map(e => multiply(e._1, e._2, input)).reduceLeft(_ | _).toBoolean
   }
 
   private def not(ch: Char): Char = if (ch == '0') '1' else '0'
@@ -64,20 +47,20 @@ object MultiplexerProvider {
     * @param input  The input signal
     * @return The result for this equation
     */
-  private def multiplicate(mux: String, muxIdx: Int, input: String): Int = {
-    (0 until mux.length).map { i =>
-      if (i < mux.length - 1) {
-        if (mux(i) == '0') {
-          not(input(i)).toBoolInt
-        } else {
-          input(i).toBoolInt
-        }
-      } else {
-        input(i + muxIdx).toBoolInt
-      }
-    }.reduceLeft(_ & _)
-  }
+  private def multiply(mux: String, muxIdx: Int, input: String): Int = (0 until mux.length).map { i =>
+    if (i < mux.length - 1) {
+      if (mux(i) == '0') not(input(i)).toBoolInt else input(i).toBoolInt
+    } else {
+      input(i + muxIdx).toBoolInt
+    }
+  }.reduceLeft(_ & _)
 
+  /**
+    * Creation of the multiplexer arguments
+    *
+    * @param i The multiplexer order
+    * @return The multiplexers
+    */
   private def createMultiplexers(i: Int): Array[String] = {
     val stringLength = findThePowerOfTwo(i)
     val threshold = Math.pow(2, stringLength - 1)
@@ -128,18 +111,7 @@ object MultiplexerProvider {
     * @param i The number to check
     * @return True, if this number is the power of two
     */
-  private def isPowerOfTwo(i: Int): Boolean = {
-    (i != 0) && ((i & i - 1) == 0)
-  }
-
-
-  implicit class StringToBooleanLogic(s: String) {
-    def toBooleanArray: Array[Boolean] = if (!s.exists(ch => ch != '1' || ch != '0')) {
-      s.map(ch => if (ch == '1') true else false).toArray
-    } else {
-      Array.emptyBooleanArray
-    }
-  }
+  private def isPowerOfTwo(i: Int): Boolean = (i != 0) && ((i & i - 1) == 0)
 
   implicit class CharToBooleanIntLogic(c: Char) {
     def toBoolInt: Int = if (c == '0') 0 else 1
@@ -147,10 +119,6 @@ object MultiplexerProvider {
 
   implicit class IntToBooleanLogic(i: Int) {
     def toBoolean: Boolean = if (i > 0) true else false
-  }
-
-  implicit class BooleanToIntLogic(b: Boolean) {
-    def toNumber: Int = if (b) 1 else 0
   }
 
 }
