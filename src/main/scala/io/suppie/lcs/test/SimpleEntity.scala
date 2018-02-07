@@ -275,13 +275,14 @@ object Utils {
   def trainModel(populationSize: Int,
                  maxGenerations: Int,
                  actions: Array[Int],
-                 gaFreq: Double): ArrayBuffer[Classifier] = {
+                 gaFreq: Double,
+                 inputSize: Int = 6): ArrayBuffer[Classifier] = {
     val population: ArrayBuffer[Classifier] = ArrayBuffer()
     val perf: ArrayBuffer[Performance] = ArrayBuffer()
 
     0 until maxGenerations foreach { generation =>
       val explore = generation % 2 == 0
-      val input = randomBitString()
+      val input = randomBitString(inputSize)
 
       val matchSet = generateMatchSet(input, population, actions, generation, populationSize)
       val predArray = generatePrediction(matchSet)
@@ -319,9 +320,10 @@ object Utils {
     population
   }
 
-  def testModel(system: ArrayBuffer[Classifier], numTrials: Int = 50): Int = {
-    val correct = (0 until numTrials).map{ i =>
-      val input = randomBitString()
+  def testModel(system: ArrayBuffer[Classifier], numTrials: Int = 50,
+                inputSize: Int = 6): Double = {
+    val correct = (0 until numTrials).map { i =>
+      val input = randomBitString(inputSize)
 
       val matchSet = system.filter(c => doesMatch(input, c.condition))
 
@@ -338,22 +340,29 @@ object Utils {
 
     println(s"Done! Classified correctly ${(correct.toDouble / numTrials.toDouble).asPercentage}")
 
-    correct
+    correct.toDouble / numTrials.toDouble
   }
 
   def main(args: Array[String]): Unit = {
+    val testLaunches = 100
+
     val system = trainModel(
       populationSize = 200,
       maxGenerations = 10000,
       actions = Array(0, 1),
       gaFreq = 25.0)
 
-    testModel(system)
+    println(s"Average accuracy is: ${
+      ((0 until testLaunches).map { i =>
+        testModel(system, 10000)
+      }.sum / testLaunches.toDouble).asPercentage
+    }")
   }
 
   implicit class DoubleAsPercentage(d: Double) {
     def asPercentage: String = NumberFormat.getPercentInstance.format(d)
   }
+
 }
 
 case class Performance(
