@@ -1,7 +1,7 @@
 package io.suppie.lcs
 
 object Test extends App {
-  val mp = MultiplexerProvider(128)
+  val mp = MultiplexerProvider(4)
   val repeatTimes: Int = 10
 
   0 until repeatTimes foreach { i =>
