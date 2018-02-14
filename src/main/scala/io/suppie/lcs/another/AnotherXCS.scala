@@ -1,31 +1,54 @@
 package io.suppie.lcs.another
 
+import java.text.NumberFormat
+
 import io.suppie.lcs.MultiplexerProvider
 import io.suppie.lcs.another.Entities._
+import io.suppie.lcs.another.GeneticEntities._
 
 import scala.collection.mutable.ArrayBuffer
-import scala.util.Random
+import scala.util.{Random, Try}
 
 case class AnotherXCS(
                        multiplexerSize: Int = 4,
                        populationSize: Int = 200,
+                       trainingIterations: Int = 40000,
+                       testingIterations: Int = 10000,
+                       performanceReportFrequency: Int = 200,
                        deletionThreshold: Double = 20.0,
                        fitnessThreshold: Double = 0.1,
-                       newClassifierWildcardAppearanceRate: Double = 0.5,
-                       beta: Double,
-                       minError: Double,
-                       learningRate: Double,
-                       alpha: Double,
-                       v: Double
+                       newClassifierWildcardAppearanceRate: Double = 1.0 / 3.0,
+                       beta: Double = 0.2,
+                       minError: Double = 10.0,
+                       learningRate: Double = 0.2,
+                       alpha: Double = 0.1,
+                       v: Double = -5.0,
+                       geneticAlgorithmFrequency: Double = 50.0,
+                       firstParentSelectionStrategy: Selection = TournamentSelection(),
+                       secondParentSelectionStrategy: SecondParentSelection = Panmixic,
+                       crossoverStrategy: CrossoverType = UniformCrossover,
+                       crossoverPredictionDecay: Double = 2.0,
+                       crossoverErrorDecay: Double = 0.125,
+                       crossoverFitnessDecay: Double = 0.05,
+                       mutationProbability: Double = 0.04,
+                       crate: Double = 0.8,
+                       explorationFrequency: Int = 2
                      ) {
-  type ActionType = Boolean
+  final val CoinFlipProbability: Double = 0.5
 
   val multiplexers = MultiplexerProvider(multiplexerSize)
 
-  val rng: Random = Random(new java.util.Random(System.currentTimeMillis()))
+  val rng: Random = Random.javaRandomToRandom(new java.util.Random(System.currentTimeMillis()))
 
   val population: ArrayBuffer[Classifier] = ArrayBuffer.empty
   population.sizeHint(populationSize)
+
+  def insertIntoPopulation(classifier: Classifier): Unit = {
+    population.find(rule => rule.condition == classifier.condition && rule.action == classifier.action) match {
+      case Some(r) => r.numerosity = r.numerosity + 1
+      case None => population.append(classifier)
+    }
+  }
 
   def deleteFromPopulation(): Unit = {
     val total = population.map(_.numerosity).sum
@@ -71,24 +94,25 @@ case class AnotherXCS(
     input.zipWithIndex.forall(e => classifier.condition.charAt(e._2) == '#' || classifier.condition.charAt(e._2) == e._1)
   }
 
-  def getMatchingClassifiers(input: String, correctAnswer: ActionType, generation: Int): ArrayBuffer[Classifier] = {
+  def getMatchingClassifiers(input: String, generation: Int, training: Boolean = false): ArrayBuffer[Classifier] = {
     val matchingClassifiers = population.filter(rule => doesMatch(input, rule))
 
-    if (matchingClassifiers.isEmpty) {
+    if (matchingClassifiers.isEmpty && training) {
       val newClassifier = Classifier(
         condition = input.map(ch => if (rng.nextDouble() < newClassifierWildcardAppearanceRate) '#' else ch).mkString,
-        action = correctAnswer,
+        action = multiplexers.targetFunction(input),
         generation = generation
       )
 
       population += newClassifier
       matchingClassifiers += newClassifier
+      deleteFromPopulation()
     }
 
     matchingClassifiers
   }
 
-  def getPredictions(matchingClassifiers: ArrayBuffer[Classifier]): Array[Prediction] = {
+  def getPredictions(matchingClassifiers: ArrayBuffer[Classifier]): Array[Prediction] = if (matchingClassifiers.nonEmpty) {
     matchingClassifiers.groupBy(_.action).map { e =>
       val count = e._2.map(_.fitness).sum
       val sum = e._2.map(_.prediction).sum * count
@@ -96,30 +120,42 @@ case class AnotherXCS(
 
       Prediction(e._1, sum, count, weight)
     }.toArray
-  }
-
-  def selectAction(predictions: Array[Prediction], isExplore: Boolean = false): ActionType = if (isExplore) {
-    val actions = predictions.map(_.action)
-    actions(rng.nextInt(actions.length))
   } else {
-    predictions.maxBy(_.weight).action
+    Array.empty
   }
 
-  def updateClassifiers(classifiers: ArrayBuffer[Classifier], reward: Double): Unit = {
+  def selectAction(predictions: Array[Prediction], isExplore: Boolean = false): Option[Boolean] = Try {
+    if (isExplore) {
+      val actions = predictions.map(_.action)
+      actions(rng.nextInt(actions.length))
+    } else {
+      predictions.maxBy(_.weight).action
+    }
+  }.toOption
+
+  def updateClassifiers(classifiers: ArrayBuffer[Classifier], reward: Double): Unit = if (classifiers.nonEmpty) {
     val numerositySum = classifiers.map(_.numerosity).sum
 
     classifiers.foreach { rule =>
       rule.experience = rule.experience + 1.0
 
-      if (rule.experience < 1.0 / beta) {
-        rule.error = (rule.error * (rule.experience - 1.0) + Math.abs(reward - rule.prediction)) / rule.experience
-        rule.prediction = (rule.prediction * (rule.experience - 1.0) + reward) / rule.experience
-        rule.setSize = (rule.setSize * (rule.experience - 1.0) + numerositySum) / rule.experience
+      val (error, prediction, setSize) = if (rule.experience < 1.0 / beta) {
+        (
+          (rule.error * (rule.experience - 1.0) + Math.abs(reward - rule.prediction)) / rule.experience,
+          (rule.prediction * (rule.experience - 1.0) + reward) / rule.experience,
+          (rule.setSize * (rule.experience - 1.0) + numerositySum) / rule.experience
+        )
       } else {
-        rule.error = rule.error + beta * (Math.abs(reward - rule.prediction) - rule.error)
-        rule.prediction = rule.prediction + beta * (reward - rule.prediction)
-        rule.setSize = rule.setSize + beta * (numerositySum - rule.setSize)
+        (
+          rule.error + beta * (Math.abs(reward - rule.prediction) - rule.error),
+          rule.prediction + beta * (reward - rule.prediction),
+          rule.setSize + beta * (numerositySum - rule.setSize)
+        )
       }
+
+      rule.error = error
+      rule.prediction = prediction
+      rule.setSize = setSize
     }
 
     // Updating fitness
@@ -129,11 +165,256 @@ case class AnotherXCS(
       val result = if (rule.error < minError) 1.0 else Math.pow(alpha * (rule.error / minError), v)
       sum = sum + result * rule.numerosity
       (rule, result)
-    }.foreach { e =>
-      val rule = e._1
-      rule.fitness = rule.fitness + learningRate * ((e._2 * rule.numerosity) / sum - rule.fitness)
-    }
+    }.foreach(e => e._1.fitness = e._1.fitness + learningRate * ((e._2 * e._1.numerosity) / sum - e._1.fitness))
   }
 
   // TODO finish implementation
+  // Genetic operations
+  // Panmictic selection
+  def rouletteWheelSelection(classifiers: ArrayBuffer[Classifier]): Classifier = {
+    val totalFitness: Double = population.map(_.fitness).sum
+    population.maxBy(_.fitness / totalFitness)
+  }
+
+  // Preferred
+  // Tournament selection
+  def tournamentSelection(classifiers: ArrayBuffer[Classifier], tournamentSize: Int = 2): Classifier = {
+    Random.shuffle(classifiers.indices.toList).take(tournamentSize).map(idx => classifiers(idx)).maxBy(_.fitness)
+  }
+
+  // Additional selection operators
+  def phenotypeSimilarity(classifiers: ArrayBuffer[Classifier], firstParent: Classifier): ArrayBuffer[(Classifier, Double)] = {
+    classifiers.filterNot(_ == firstParent).map(c => (c, Math.abs(c.fitness - firstParent.fitness)))
+  }
+
+  def genotypeSimilarity(classifiers: ArrayBuffer[Classifier], firstParent: Classifier): ArrayBuffer[(Classifier, Double)] = {
+    classifiers.filterNot(_ == firstParent).map { c =>
+      (c, c.condition.zipWithIndex.map { ch =>
+        if (ch._1 == firstParent.condition.charAt(ch._2)) {
+          1.0
+        } else if (ch._1 == '#' || firstParent.condition.charAt(ch._2) == '#') {
+          0.5
+        } else {
+          0.0
+        }
+      }.sum)
+    }
+  }
+
+  // Phenotype inbreeding for second parent selection
+  def getSecondParentPhIn(classifiers: ArrayBuffer[Classifier], firstParent: Classifier): Classifier = {
+    phenotypeSimilarity(classifiers, firstParent).minBy(_._2)._1
+  }
+
+  // Genotype inbreeding for second parent selection
+  def getSecondParentGeIn(classifiers: ArrayBuffer[Classifier], firstParent: Classifier): Classifier = {
+    genotypeSimilarity(classifiers, firstParent).maxBy(_._2)._1
+  }
+
+  // Phenotype outbreeding for second parent selection
+  def getSecondParentPhOut(classifiers: ArrayBuffer[Classifier], firstParent: Classifier): Classifier = {
+    phenotypeSimilarity(classifiers, firstParent).maxBy(_._2)._1
+  }
+
+  // Genotype outbreeding for second parent selection
+  def getSecondParentGeOut(classifiers: ArrayBuffer[Classifier], firstParent: Classifier): Classifier = {
+    genotypeSimilarity(classifiers, firstParent).minBy(_._2)._1
+  }
+
+  // Crossover
+  def crossover(firstParent: Classifier, secondParent: Classifier, generation: Int): (Classifier, Classifier) = {
+    val (oCondition1, oCondition2) = crossoverStrategy match {
+      case OnePointCrossover => onePointCrossover(firstParent, secondParent)
+      case NPointCrossover(n) => nPointCrossover(n, firstParent, secondParent)
+      case UniformCrossover => (uniformCrossover(firstParent, secondParent), uniformCrossover(firstParent, secondParent))
+    }
+
+    val prediction = (firstParent.prediction + secondParent.prediction) / crossoverPredictionDecay
+    val error = (firstParent.error + secondParent.error) * crossoverErrorDecay
+    val fitness = (firstParent.fitness + secondParent.fitness) * crossoverFitnessDecay
+
+    (
+      firstParent.copy(
+        condition = oCondition1,
+        generation = generation,
+        prediction = prediction,
+        error = error,
+        fitness = fitness
+      ),
+      secondParent.copy(
+        condition = oCondition2,
+        generation = generation,
+        prediction = prediction,
+        error = error,
+        fitness = fitness
+      )
+    )
+  }
+
+  // Preferred
+  // Uniform crossover
+  def uniformCrossover(firstParent: Classifier, secondParent: Classifier): String = {
+    firstParent.condition.zipWithIndex.map { ch =>
+      if (rng.nextDouble() < CoinFlipProbability) ch._1 else secondParent.condition.charAt(ch._2)
+    }.mkString
+  }
+
+  // One point crossover
+  def onePointCrossover(firstParent: Classifier, secondParent: Classifier): (String, String) = {
+    val point = rng.nextInt(firstParent.condition.length)
+
+    (
+      firstParent.condition.take(point) + secondParent.condition.drop(point),
+      secondParent.condition.take(point) + firstParent.condition.drop(point)
+    )
+  }
+
+  // N point crossover
+  def nPointCrossover(n: Int, firstParent: Classifier, secondParent: Classifier): (String, String) = {
+    if (n >= firstParent.condition.length) {
+      (uniformCrossover(firstParent, secondParent), uniformCrossover(firstParent, secondParent))
+    } else {
+      val bounds = List(0, firstParent.condition.length)
+      val indicesToShuffle = firstParent.condition.indices.filterNot(bounds.contains)
+      val shuffledIndices = (rng.shuffle(indicesToShuffle.toList).take(n) ++ bounds).sorted
+
+      var fCondition = ""
+      var sCondition = ""
+
+      0 until (shuffledIndices.size - 1) foreach { i =>
+        if (rng.nextDouble() < CoinFlipProbability) {
+          fCondition = fCondition + firstParent.condition.substring(shuffledIndices(i), shuffledIndices(i + 1))
+          sCondition = sCondition + secondParent.condition.substring(shuffledIndices(i), shuffledIndices(i + 1))
+        } else {
+          sCondition = sCondition + firstParent.condition.substring(shuffledIndices(i), shuffledIndices(i + 1))
+          fCondition = fCondition + secondParent.condition.substring(shuffledIndices(i), shuffledIndices(i + 1))
+        }
+      }
+
+      (fCondition, sCondition)
+    }
+  }
+
+  // Mutation
+  def mutation(classifier: Classifier, input: String): Classifier = {
+    classifier.copy(
+      condition = classifier.condition.zipWithIndex.map { ch =>
+        if (rng.nextDouble() < mutationProbability) if (ch._1 == '#') input.charAt(ch._2) else '#' else ch._1
+      }.mkString,
+      action = if (rng.nextDouble() < mutationProbability) !classifier.action else classifier.action
+    )
+  }
+
+  def runGeneticAlgorithm(classifiers: ArrayBuffer[Classifier], generation: Int, input: String): Unit = if (classifiers.length > 2) {
+    val total = classifiers.map(r => r.generation * r.numerosity).sum
+    val sum = classifiers.map(_.numerosity).sum
+
+    if (generation - (total / sum) > geneticAlgorithmFrequency) {
+      // Parents selection
+      val firstParent = firstParentSelectionStrategy match {
+        case RouletteWheelSelection => rouletteWheelSelection(classifiers)
+        case TournamentSelection(size) => tournamentSelection(classifiers, size)
+      }
+
+      val secondParent = secondParentSelectionStrategy match {
+        case Panmixic => firstParentSelectionStrategy match {
+          case RouletteWheelSelection => rouletteWheelSelection(classifiers -= firstParent)
+          case TournamentSelection(size) => tournamentSelection(classifiers -= firstParent, size)
+        }
+        case PhenotypeInbreeding => getSecondParentPhIn(classifiers, firstParent)
+        case PhenotypeOutbreeding => getSecondParentPhOut(classifiers, firstParent)
+        case GenotypeInbreeding => getSecondParentGeIn(classifiers, firstParent)
+        case GenotypeOutbreeding => getSecondParentGeOut(classifiers, firstParent)
+      }
+
+      // Crossover
+      var (offspring1, offspring2) = if (Random.nextDouble() < crate) {
+        crossover(firstParent, secondParent, generation)
+      } else {
+        (firstParent.copy(), secondParent.copy())
+      }
+
+      // Mutation
+      offspring1 = mutation(offspring1, input)
+      offspring2 = mutation(offspring2, input)
+
+      // Insertion
+      insertIntoPopulation(offspring1)
+      insertIntoPopulation(offspring2)
+
+      while (populationSize < population.map(_.numerosity).sum) {
+        deleteFromPopulation()
+      }
+    }
+  }
+
+  def trainModel(): Unit = {
+    val performance: ArrayBuffer[Performance] = ArrayBuffer.empty
+
+    val positiveReward: Double = 1000.0
+    val negativeReward: Double = 0.0
+
+    0 until trainingIterations foreach { generation =>
+      val explore = generation % explorationFrequency == 0
+
+      val input = multiplexers.generateRandomMultiplexerSignal
+      val correctAction = multiplexers.targetFunction(input)
+
+      val matchingClassifiers = getMatchingClassifiers(input, generation, training = true)
+      val predictions = getPredictions(matchingClassifiers)
+      val predictedAction = selectAction(predictions, explore)
+
+      val reward = if (predictedAction.isDefined && correctAction == predictedAction.get) positiveReward else negativeReward
+
+      if (explore) {
+        updateClassifiers(matchingClassifiers.filter(rule => predictedAction.isDefined && rule.action == predictedAction.get), reward)
+        runGeneticAlgorithm(matchingClassifiers, generation, input)
+      } else {
+        performance.append(Performance(
+          error = Math.abs(predictions.maxBy(_.weight).weight - reward),
+          correct = if (predictedAction.isDefined && correctAction == predictedAction.get) 1 else 0
+        ))
+
+        if (performance.size > performanceReportFrequency) {
+          val error = Math.round(performance.map(_.error).sum / performance.length.toDouble)
+          val accuracy = performance.map(_.correct).sum / performance.size.toDouble
+
+          println(s"Generation $generation, population size ${population.length} => errors $error, accuracy ${accuracy.asPercentage}")
+
+          performance.clear()
+        }
+      }
+    }
+  }
+
+  def testModel(): Double = {
+    val result = (0 until trainingIterations).map { iteration =>
+      val input = multiplexers.generateRandomMultiplexerSignal
+      val matchingClassifiers = getMatchingClassifiers(input, iteration)
+      val predictions = getPredictions(matchingClassifiers)
+      val predictedAction = selectAction(predictions)
+
+      if (predictedAction.isDefined && multiplexers.targetFunction(input) == predictedAction.get) {
+        1
+      } else {
+        0
+      }
+    }.sum.toDouble / trainingIterations.toDouble
+
+    println(s"Classified correctly ${result.asPercentage} instances")
+
+    result
+  }
+
+  implicit class DoubleAsPercentage(d: Double) {
+    def asPercentage: String = NumberFormat.getPercentInstance.format(d)
+  }
+
+}
+
+
+object XcsTest extends App {
+  val test = AnotherXCS()
+  test.trainModel()
+  test.testModel()
 }

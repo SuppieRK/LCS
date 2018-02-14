@@ -224,19 +224,13 @@ object LCS {
     }
   }
 
-  def uniformCrossover(
-                        parent1: String,
-                        parent2: String
-                      ): String = {
+  def uniformCrossover(parent1: String, parent2: String): String = {
     parent1.zipWithIndex.map { e =>
       if (Random.nextDouble() < 0.5) e._1 else parent2.charAt(e._2)
     }.mkString
   }
 
-  def insertInPopulation(
-                          cl: Classifier,
-                          population: ArrayBuffer[Classifier]
-                        ): Unit = {
+  def insertInPopulation(cl: Classifier, population: ArrayBuffer[Classifier]): Unit = {
     population.find(c => c.condition == cl.condition && c.action == cl.action) match {
       case Some(classifier) =>
         classifier.numerocity += 1
@@ -245,12 +239,7 @@ object LCS {
     }
   }
 
-  def crossover(
-                 c1: Classifier,
-                 c2: Classifier,
-                 p1: Classifier,
-                 p2: Classifier
-               ): Unit = {
+  def crossover(c1: Classifier, c2: Classifier, p1: Classifier, p2: Classifier): Unit = {
     c1.condition = uniformCrossover(p1.condition, p2.condition)
     c2.condition = uniformCrossover(p1.condition, p2.condition)
 
