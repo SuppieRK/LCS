@@ -1,12 +1,12 @@
-package io.suppie.lcs.test
+package io.suppie.lcs
 
 import java.text.NumberFormat
 
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
-import scala.util.control.Breaks._
+import scala.util.control.Breaks.{break, breakable}
 
-object Utils {
+object LCS {
   def negate(bit: Byte): Byte = if (bit == 1) 0 else 1
 
   def targetFunction(input: String): Int = {
@@ -18,16 +18,6 @@ object Utils {
       bytes(0) * bytes(1) * bytes(5)
   }
 
-  def copyClassifier(c: Classifier): Classifier = Classifier(
-    condition = c.condition,
-    action = c.action,
-    generation = c.generation,
-    prediction = c.prediction,
-    error = c.error,
-    fitness = c.fitness,
-    setSize = c.setSize
-  )
-
   def randomBitString(size: Int = 6): String = {
     0 until size map (_ => Math.round(Random.nextDouble())) mkString
   }
@@ -36,7 +26,7 @@ object Utils {
                              classifier: Classifier,
                              population: ArrayBuffer[Classifier],
                              deletionThreshold: Double,
-                             fitnessThreshold: Double = 0.1
+                             fitnessThreshold: Double
                            ): Double = {
     val vote = classifier.setSize * classifier.numerocity
     val total = population.map(_.numerocity).sum
@@ -50,13 +40,16 @@ object Utils {
     }
   }
 
-  def deleteFromPopulation(population: ArrayBuffer[Classifier],
-                           populationSize: Int,
-                           deletionThreshold: Double = 20.0): Unit = {
+  def deleteFromPopulation(
+                            population: ArrayBuffer[Classifier],
+                            populationSize: Int,
+                            deletionThreshold: Double,
+                            fitnessThreshold: Double
+                          ): Unit = {
     val total = population.map(_.numerocity).sum
 
     if (total > populationSize) {
-      val votes: Seq[(Classifier, Double, Int)] = population.zipWithIndex.map(e => (e._1, calculateDeletionVote(e._1, population, deletionThreshold), e._2))
+      val votes: Seq[(Classifier, Double, Int)] = population.zipWithIndex.map(e => (e._1, calculateDeletionVote(e._1, population, deletionThreshold, fitnessThreshold), e._2))
       var votesSum: Double = votes.map(_._2).sum
       val point = Random.nextDouble() * votesSum
 
@@ -81,31 +74,45 @@ object Utils {
     }
   }
 
-  def generateRandomClassifier(input: String,
-                               actions: Array[Int],
-                               generation: Int,
-                               rate: Double = 1.0 / 3.0): Classifier = Classifier(
+  def generateRandomClassifier(
+                                input: String,
+                                actions: Array[Int],
+                                generation: Int,
+                                rate: Double
+                              ): Classifier = Classifier(
     condition = input.map(ch => if (Random.nextDouble() < rate) "#" else ch).mkString,
     action = actions(Random.nextInt(actions.length)),
     generation = generation
   )
 
-  def doesMatch(input: String, condition: String): Boolean =
+  def doesMatch(
+                 input: String,
+                 condition: String
+               ): Boolean = {
     input.zipWithIndex.forall(e => condition.charAt(e._2) == '#' || condition.charAt(e._2) == e._1)
+  }
 
   def getActions(population: ArrayBuffer[Classifier]): ArrayBuffer[Int] = population.map(_.action).distinct
 
-  def generateMatchSet(input: String, population: ArrayBuffer[Classifier],
-                       allActions: Array[Int], generation: Int, populationSize: Int): ArrayBuffer[Classifier] = {
+  def generateMatchSet(
+                        input: String,
+                        population: ArrayBuffer[Classifier],
+                        allActions: Array[Int],
+                        generation: Int,
+                        populationSize: Int,
+                        deletionThreshold: Double,
+                        fitnessThreshold: Double,
+                        rate: Double
+                      ): ArrayBuffer[Classifier] = {
     val matchSet = population.filter(c => doesMatch(input, c.condition))
     val actions = getActions(matchSet)
 
     while (actions.length < allActions.length) {
       val remaining = allActions.filter(!actions.contains(_))
-      val classifier = generateRandomClassifier(input, remaining, generation)
+      val classifier = generateRandomClassifier(input, remaining, generation, rate)
       population += classifier
       matchSet += classifier
-      deleteFromPopulation(population, populationSize)
+      deleteFromPopulation(population, populationSize, deletionThreshold, fitnessThreshold)
       actions += classifier.action
     }
 
@@ -122,7 +129,10 @@ object Utils {
     }.toArray
   }
 
-  def selectAction(predictions: Array[Prediction], pExplore: Boolean = false): Int = {
+  def selectAction(
+                    predictions: Array[Prediction],
+                    pExplore: Boolean = false
+                  ): Int = {
     val keys = predictions.map(_.action)
 
     if (pExplore) {
@@ -132,7 +142,11 @@ object Utils {
     }
   }
 
-  def updateSet(actionSet: ArrayBuffer[Classifier], reward: Double, beta: Double = 0.2): Unit = {
+  def updateSet(
+                 actionSet: ArrayBuffer[Classifier],
+                 reward: Double,
+                 beta: Double
+               ): Unit = {
     val sum = actionSet.map(_.numerocity).sum
 
     actionSet.foreach { c =>
@@ -154,8 +168,13 @@ object Utils {
     }
   }
 
-  def updateFitness(actionSet: ArrayBuffer[Classifier], minError: Double = 10.0,
-                    learningRate: Double = 0.2, alpha: Double = 0.1, v: Double = -5.0): Unit = {
+  def updateFitness(
+                     actionSet: ArrayBuffer[Classifier],
+                     minError: Double,
+                     learningRate: Double,
+                     alpha: Double,
+                     v: Double
+                   ): Unit = {
     var sum = 0.0
 
     actionSet.map { c =>
@@ -179,6 +198,13 @@ object Utils {
     }
   }
 
+  /**
+    * Турнирная селекция — сначала случайно выбирается установленное количество особей (обычно две),
+    * а затем из них выбирается особь с лучшим значением функции приспособленности
+    *
+    * @param population
+    * @return
+    */
   def binaryTournament(population: ArrayBuffer[Classifier]): Classifier = {
     val i = population(Random.nextInt(population.length))
     var j = population(Random.nextInt(population.length))
@@ -190,7 +216,34 @@ object Utils {
     if (i.fitness > j.fitness) i else j
   }
 
-  def mutation(c: Classifier, actionSet: ArrayBuffer[Classifier], input: String, rate: Double = 0.04): Unit = {
+  /**
+    * вероятность выбора особи тем вероятнее, чем лучше её значение функции приспособленности
+    * {\displaystyle p_{i}={\frac {f_{i}}{\sum _{i=1}^{N}{f_{i}}}}} p_{i}={\frac {f_{i}}{\sum _{i=1}^{N}{f_{i}}}},
+    * где {\displaystyle p_{i}} p_{i} — вероятность выбора i особи,
+    * {\displaystyle f_{i}} f_{i} — значение функции приспособленности для i особи,
+    * {\displaystyle N} N — количество особей в популяции
+    *
+    * @param population
+    * @return
+    */
+  def rouletteSelection(population: ArrayBuffer[Classifier]): Classifier = {
+    val totalFitness: Double = population.map(_.fitness).sum
+    population.map(c => (c, c.fitness / totalFitness)).maxBy(_._2)._1
+  }
+
+  /*
+  Методы селекции, не подходящие к данному алгоритму:
+  1. Метод ранжирования - ненужная оптимизация функции приспособленности
+  2. Равномерное ранжирование - нет сортировки, зависит от размера популяции
+  3. Сигма отсечение - зависит от среднеквадратичного отклонения значения целевой функции, которое является случайной величиной
+   */
+
+  def mutation(
+                c: Classifier,
+                actionSet: ArrayBuffer[Classifier],
+                input: String,
+                rate: Double
+              ): Unit = {
     val newCondition = c.condition.zipWithIndex.map { e =>
       if (Random.nextDouble() < rate) {
         if (e._1 == '#') {
@@ -211,13 +264,19 @@ object Utils {
     }
   }
 
-  def uniformCrossover(parent1: String, parent2: String): String = {
+  def uniformCrossover(
+                        parent1: String,
+                        parent2: String
+                      ): String = {
     parent1.zipWithIndex.map { e =>
       if (Random.nextDouble() < 0.5) e._1 else parent2.charAt(e._2)
     }.mkString
   }
 
-  def insertInPopulation(cl: Classifier, population: ArrayBuffer[Classifier]): Unit = {
+  def insertInPopulation(
+                          cl: Classifier,
+                          population: ArrayBuffer[Classifier]
+                        ): Unit = {
     population.find(c => c.condition == cl.condition && c.action == cl.action) match {
       case Some(classifier) =>
         classifier.numerocity += 1
@@ -226,10 +285,12 @@ object Utils {
     }
   }
 
-  def crossover(c1: Classifier,
-                c2: Classifier,
-                p1: Classifier,
-                p2: Classifier): Unit = {
+  def crossover(
+                 c1: Classifier,
+                 c2: Classifier,
+                 p1: Classifier,
+                 p2: Classifier
+               ): Unit = {
     c1.condition = uniformCrossover(p1.condition, p2.condition)
     c2.condition = uniformCrossover(p1.condition, p2.condition)
 
@@ -246,45 +307,72 @@ object Utils {
     c2.fitness = fitness
   }
 
-  def runGeneticAlgorithm(actions: Array[Int],
-                          population: ArrayBuffer[Classifier],
-                          actionSet: ArrayBuffer[Classifier],
-                          input: String,
-                          generation: Double,
-                          populationSize: Int,
-                          crate: Double = 0.8): Unit = {
-    val p1 = binaryTournament(actionSet)
-    val p2 = binaryTournament(actionSet)
-    val c1 = copyClassifier(p1)
-    val c2 = copyClassifier(p2)
+  def runGeneticAlgorithm(
+                           selectionAlgorithm: String,
+                           actions: Array[Int],
+                           population: ArrayBuffer[Classifier],
+                           actionSet: ArrayBuffer[Classifier],
+                           input: String,
+                           generation: Double,
+                           populationSize: Int,
+                           deletionThreshold: Double,
+                           fitnessThreshold: Double,
+                           crate: Double,
+                           rate: Double
+                         ): Unit = {
+    val p1 = selectionAlgorithm match {
+      case "binary" => binaryTournament(actionSet)
+      case "roulette" => rouletteSelection(actionSet)
+    }
+
+    val p2 = selectionAlgorithm match {
+      case "binary" => binaryTournament(actionSet.filterNot(_ == p1))
+      case "roulette" => rouletteSelection(actionSet.filterNot(_ == p1))
+    }
+
+    val c1 = p1.copy()
+    val c2 = p2.copy()
 
     if (Random.nextDouble() < crate) {
       crossover(c1, c2, p1, p2)
     }
 
     Seq(c1, c2) foreach { c =>
-      mutation(c, actionSet, input)
+      mutation(c, actionSet, input, rate)
       insertInPopulation(c, population)
     }
 
     while (populationSize < population.map(_.numerocity).sum) {
-      deleteFromPopulation(population, populationSize)
+      deleteFromPopulation(population, populationSize, deletionThreshold, fitnessThreshold)
     }
   }
 
-  def trainModel(populationSize: Int,
-                 maxGenerations: Int,
-                 actions: Array[Int],
-                 gaFreq: Double,
-                 inputSize: Int = 6): ArrayBuffer[Classifier] = {
+  def trainModel(
+                  selectionAlgorithm: String,
+                  populationSize: Int,
+                  maxGenerations: Int,
+                  actions: Array[Int],
+                  gaFreq: Double,
+                  inputSize: Int,
+                  deletionThreshold: Double,
+                  fitnessThreshold: Double,
+                  rate: Double,
+                  beta: Double,
+                  minError: Double,
+                  learningRate: Double,
+                  alpha: Double,
+                  v: Double,
+                  crate: Double,
+                  exploreFrequency: Int
+                ): ArrayBuffer[Classifier] = {
     val population: ArrayBuffer[Classifier] = ArrayBuffer()
     val perf: ArrayBuffer[Performance] = ArrayBuffer()
 
     0 until maxGenerations foreach { generation =>
-      val explore = generation % 2 == 0
+      val explore = generation % gaFreq == 0
       val input = randomBitString(inputSize)
 
-      val matchSet = generateMatchSet(input, population, actions, generation, populationSize)
+      val matchSet = generateMatchSet(input, population, actions, generation, populationSize, deletionThreshold, fitnessThreshold, rate)
       val predArray = generatePrediction(matchSet)
 
       val action = selectAction(predArray, explore)
@@ -293,12 +381,12 @@ object Utils {
 
       if (explore) {
         val actionSet = matchSet.filter(_.action == action)
-        updateSet(actionSet, reward)
-        updateFitness(actionSet)
+        updateSet(actionSet, reward, beta)
+        updateFitness(actionSet, minError, learningRate, alpha, v)
 
         if (canRunGeneticAlgorithm(actionSet, generation, gaFreq)) {
           actionSet.foreach(_.generation = generation)
-          runGeneticAlgorithm(actions, population, actionSet, input, generation, populationSize)
+          runGeneticAlgorithm(selectionAlgorithm, actions, population, actionSet, input, generation, populationSize, deletionThreshold, fitnessThreshold, crate, rate)
         }
       } else {
         perf += Performance(
@@ -320,8 +408,11 @@ object Utils {
     population
   }
 
-  def testModel(system: ArrayBuffer[Classifier], numTrials: Int = 50,
-                inputSize: Int = 6): Double = {
+  def testModel(
+                 system: ArrayBuffer[Classifier],
+                 numTrials: Int,
+                 inputSize: Int
+               ): Double = {
     val correct = (0 until numTrials).map { i =>
       val input = randomBitString(inputSize)
 
@@ -331,11 +422,7 @@ object Utils {
 
       val action = selectAction(predArray)
 
-      if (targetFunction(input) == action) {
-        1
-      } else {
-        0
-      }
+      if (targetFunction(input) == action) 1 else 0
     }.sum
 
     println(s"Done! Classified correctly ${(correct.toDouble / numTrials.toDouble).asPercentage}")
@@ -347,14 +434,31 @@ object Utils {
     val testLaunches = 100
 
     val system = trainModel(
+      selectionAlgorithm = "roulette",
       populationSize = 200,
-      maxGenerations = 10000,
+      maxGenerations = 40000,
       actions = Array(0, 1),
-      gaFreq = 25.0)
+      gaFreq = 50.0,
+      inputSize = 6,
+      deletionThreshold = 20.0,
+      fitnessThreshold = 0.1,
+      rate = 1.0 / 3.0,
+      beta = 0.2,
+      minError = 10.0,
+      learningRate = 0.2,
+      alpha = 0.1,
+      v = -5.0,
+      crate = 0.8,
+      exploreFrequency = 2
+    )
+
+    println(s"\nPopulation consists of: \n${system.map(_.toString).mkString("\n")}\n")
+
+    println(s"Population contains duplicate rules: \n${system.groupBy(_.condition).filter(e => e._2.length > 2).keySet.mkString("\n")}\n")
 
     println(s"Average accuracy is: ${
       ((0 until testLaunches).map { i =>
-        testModel(system, 10000)
+        testModel(system, 1000, 6)
       }.sum / testLaunches.toDouble).asPercentage
     }")
   }
