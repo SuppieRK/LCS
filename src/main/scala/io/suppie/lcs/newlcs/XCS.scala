@@ -66,14 +66,14 @@ object SelectionStrategy {
 
 case class XCS(
                 multiplexerSize: Int = 4,
-                trainSetSize: Int = 40000,
+                trainSetSize: Int = 10000,
                 testSetSize: Int = 10000,
                 runTimes: Int = 100,
                 populationSize: Int = 200,
                 coveringWildcardProbability: Double = 1.0 / 3.0,
                 gaFirstParentSelection: Selection = TournamentSelection(),
                 gaSecondParentSelection: SecondParentSelection = Panmixic,
-                gaCrossoverType: CrossoverType = UniformCrossover,
+                gaCrossoverType: CrossoverType = OnePointCrossover,
                 crossoverProbability: Double = 0.5,
                 crossoverPredictionDecay: Double = 2.0,
                 crossoverErrorDecay: Double = 0.125,
@@ -88,7 +88,7 @@ case class XCS(
                 v: Double = -0.5,
                 crate: Double = 0.8,
                 gaFrequency: Double = 10.0,
-                explorationRate: Int = 2
+                explorationRate: Int = 50
               ) extends IntAdditionalLogic {
   val multiplexers = MultiplexerProvider(multiplexerSize)
 
@@ -244,13 +244,9 @@ case class XCS(
       (firstParent.copy(), secondParent.copy())
     }
 
-    population
-
     // Mutation
     offspring1 = mutation(offspring1, input)
     offspring2 = mutation(offspring2, input)
-
-    population
 
     // Insert into the population
     insertRule(offspring1)
@@ -452,7 +448,7 @@ case class XCS(
       if (explore) {
         //val (set1, set2) = matchSet.groupBy(_.action)
 
-        val grouped = matchSet.groupBy(_.action)
+        /*val grouped = matchSet.groupBy(_.action)
 
         val (correct, incorrect) = if (selectedAction == correctAction) {
           (grouped.getOrElse(selectedAction, ArrayBuffer.empty), grouped.getOrElse(!selectedAction, ArrayBuffer.empty))
@@ -461,7 +457,11 @@ case class XCS(
         }
 
         updateSet(correct, positiveReward)
-        updateSet(incorrect, negativeReward)
+        updateSet(incorrect, negativeReward)*/
+
+        population
+
+        updateSet(matchSet, if (selectedAction == correctAction) positiveReward else negativeReward)
 
         if (canRunGa(generation, matchSet)) {
           runGa(input, generation, matchSet)
