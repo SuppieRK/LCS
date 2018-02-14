@@ -22,12 +22,7 @@ object LCS {
     0 until size map (_ => Math.round(Random.nextDouble())) mkString
   }
 
-  def calculateDeletionVote(
-                             classifier: Classifier,
-                             population: ArrayBuffer[Classifier],
-                             deletionThreshold: Double,
-                             fitnessThreshold: Double
-                           ): Double = {
+  def calculateDeletionVote(classifier: Classifier, population: ArrayBuffer[Classifier], deletionThreshold: Double, fitnessThreshold: Double): Double = {
     val vote = classifier.setSize * classifier.numerocity
     val total = population.map(_.numerocity).sum
     val averageFitness = population.map(_.fitness / total).sum
@@ -40,12 +35,7 @@ object LCS {
     }
   }
 
-  def deleteFromPopulation(
-                            population: ArrayBuffer[Classifier],
-                            populationSize: Int,
-                            deletionThreshold: Double,
-                            fitnessThreshold: Double
-                          ): Unit = {
+  def deleteFromPopulation(population: ArrayBuffer[Classifier], populationSize: Int, deletionThreshold: Double, fitnessThreshold: Double): Unit = {
     val total = population.map(_.numerocity).sum
 
     if (total > populationSize) {
@@ -74,36 +64,19 @@ object LCS {
     }
   }
 
-  def generateRandomClassifier(
-                                input: String,
-                                actions: Array[Int],
-                                generation: Int,
-                                rate: Double
-                              ): Classifier = Classifier(
+  def generateRandomClassifier(input: String, actions: Array[Int], generation: Int, rate: Double): Classifier = Classifier(
     condition = input.map(ch => if (Random.nextDouble() < rate) "#" else ch).mkString,
     action = actions(Random.nextInt(actions.length)),
     generation = generation
   )
 
-  def doesMatch(
-                 input: String,
-                 condition: String
-               ): Boolean = {
+  def doesMatch(input: String, condition: String): Boolean = {
     input.zipWithIndex.forall(e => condition.charAt(e._2) == '#' || condition.charAt(e._2) == e._1)
   }
 
   def getActions(population: ArrayBuffer[Classifier]): ArrayBuffer[Int] = population.map(_.action).distinct
 
-  def generateMatchSet(
-                        input: String,
-                        population: ArrayBuffer[Classifier],
-                        allActions: Array[Int],
-                        generation: Int,
-                        populationSize: Int,
-                        deletionThreshold: Double,
-                        fitnessThreshold: Double,
-                        rate: Double
-                      ): ArrayBuffer[Classifier] = {
+  def generateMatchSet(input: String, population: ArrayBuffer[Classifier], allActions: Array[Int], generation: Int, populationSize: Int, deletionThreshold: Double, fitnessThreshold: Double, rate: Double): ArrayBuffer[Classifier] = {
     val matchSet = population.filter(c => doesMatch(input, c.condition))
     val actions = getActions(matchSet)
 
@@ -129,10 +102,7 @@ object LCS {
     }.toArray
   }
 
-  def selectAction(
-                    predictions: Array[Prediction],
-                    pExplore: Boolean = false
-                  ): Int = {
+  def selectAction(predictions: Array[Prediction], pExplore: Boolean = false): Int = {
     val keys = predictions.map(_.action)
 
     if (pExplore) {
@@ -142,11 +112,7 @@ object LCS {
     }
   }
 
-  def updateSet(
-                 actionSet: ArrayBuffer[Classifier],
-                 reward: Double,
-                 beta: Double
-               ): Unit = {
+  def updateSet(actionSet: ArrayBuffer[Classifier], reward: Double, beta: Double): Unit = {
     val sum = actionSet.map(_.numerocity).sum
 
     actionSet.foreach { c =>
@@ -168,13 +134,7 @@ object LCS {
     }
   }
 
-  def updateFitness(
-                     actionSet: ArrayBuffer[Classifier],
-                     minError: Double,
-                     learningRate: Double,
-                     alpha: Double,
-                     v: Double
-                   ): Unit = {
+  def updateFitness(actionSet: ArrayBuffer[Classifier], minError: Double, learningRate: Double, alpha: Double, v: Double): Unit = {
     var sum = 0.0
 
     actionSet.map { c =>

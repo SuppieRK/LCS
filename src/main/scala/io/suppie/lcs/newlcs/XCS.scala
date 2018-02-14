@@ -73,7 +73,7 @@ case class XCS(
                 coveringWildcardProbability: Double = 1.0 / 3.0,
                 gaFirstParentSelection: Selection = TournamentSelection(),
                 gaSecondParentSelection: SecondParentSelection = Panmixic,
-                gaCrossoverType: CrossoverType = OnePointCrossover,
+                gaCrossoverType: CrossoverType = UniformCrossover,
                 crossoverProbability: Double = 0.5,
                 crossoverPredictionDecay: Double = 2.0,
                 crossoverErrorDecay: Double = 0.125,
@@ -94,17 +94,15 @@ case class XCS(
 
   val population: ArrayBuffer[Classifier] = ArrayBuffer.empty
 
-  def insertRule(cl: Classifier): Unit = {
-    population.find(c => c.condition == cl.condition && c.action == cl.action) match {
-      case Some(classifier) => classifier.numerosity = classifier.numerosity + 1
-      case None => population.append(cl)
-    }
+  def insertRule(cl: Classifier): Unit = population.find(c => c.condition == cl.condition && c.action == cl.action) match {
+    case Some(classifier) => classifier.numerosity = classifier.numerosity + 1
+    case None => population.append(cl)
   }
 
   def deleteFromPopulation(): Unit = {
     val total = population.map(_.numerosity).sum
 
-    def calculateDeletionRule(cl: Classifier): Double = {
+    def calculateDeletionVote(cl: Classifier): Double = {
       val vote = cl.setSize / cl.numerosity
       val avgFitness = population.map(_.fitness / total).sum
       val derated = cl.fitness / cl.numerosity
@@ -117,8 +115,8 @@ case class XCS(
     }
 
     if (total > populationSize) {
-      val votes = population.zipWithIndex.map(c => (c._1, calculateDeletionRule(c._1), c._2))
-      var point = Random.nextDouble() * votes.map(_._2).sum
+      val votes = population.zipWithIndex.map(c => (c._1, calculateDeletionVote(c._1), c._2))
+      val point = Random.nextDouble() * votes.map(_._2).sum
 
       import scala.util.control.Breaks._
 
@@ -151,27 +149,25 @@ case class XCS(
 
   // 2. Generate match set
   // 3. Split match set onto correct and incorrect sets
-  def getMatchSet(input: String, possibleActions: Array[Boolean], currentGenerationIndex: Int): ArrayBuffer[Classifier] = {
-    val correctSet = population.filter(rule => doesMatch(input, rule.condition))
+  def generateMatchSet(input: String, correctAction: Boolean, generation: Int): ArrayBuffer[Classifier] = {
+    val matchSet = population.filter(rule => doesMatch(input, rule.condition))
 
-    if (correctSet.isEmpty) {
-      val coveringClassifier = coveringMechanism(input, possibleActions(Random.nextInt(possibleActions.length)), currentGenerationIndex)
-      correctSet.append(coveringClassifier)
-      population.append(coveringClassifier)
+    if (!matchSet.map(_.action).contains(correctAction)) {
+      val covering = coveringMechanism(input, correctAction, generation)
+      matchSet.append(covering)
+      population.append(covering)
       deleteFromPopulation()
     }
 
-    correctSet
+    matchSet
   }
 
   // 4. Covering mechanism aka Rule discovery
-  def coveringMechanism(input: String, correctAction: Boolean, currentGenerationIndex: Int): Classifier = {
-    Classifier(
-      condition = input.map(ch => if (Random.nextDouble() < coveringWildcardProbability) '#' else ch).mkString,
-      action = correctAction,
-      birthGeneration = currentGenerationIndex
-    )
-  }
+  def coveringMechanism(input: String, correctAction: Boolean, currentGenerationIndex: Int): Classifier = Classifier(
+    condition = input.map(ch => if (Random.nextDouble() < coveringWildcardProbability) '#' else ch).mkString,
+    action = correctAction,
+    birthGeneration = currentGenerationIndex
+  )
 
   // 5. Update parameter classifiers
   def updateSet(set: ArrayBuffer[Classifier], reward: Double): Unit = if (set.nonEmpty) {
@@ -372,40 +368,28 @@ case class XCS(
   def uniformCrossover(firstParent: Classifier, secondParent: Classifier): (String, String) = {
     (
       firstParent.condition.zipWithIndex.map { e =>
-        val fCh = e._1
-        val sCh = secondParent.condition.charAt(e._2)
-
-        if (fCh == sCh) {
-          fCh
-        } else {
-          if (Random.nextDouble() < crossoverProbability) fCh else sCh
-        }
-      }.mkString
-      ,
+        if (Random.nextDouble() < crossoverProbability) e._1 else secondParent.condition.charAt(e._2)
+      }.mkString,
       firstParent.condition.zipWithIndex.map { e =>
-        val fCh = e._1
-        val sCh = secondParent.condition.charAt(e._2)
-
-        if (fCh == sCh) {
-          fCh
-        } else {
-          if (Random.nextDouble() < crossoverProbability) fCh else sCh
-        }
+        if (Random.nextDouble() < crossoverProbability) e._1 else secondParent.condition.charAt(e._2)
       }.mkString
     )
   }
 
   // 7.3 Mutation
-  def mutation(initialRule: Classifier, input: String): Classifier = {
-    var newCondition = initialRule.condition.zipWithIndex.map { ch =>
-      if (Random.nextDouble() < mutationProbability) {
-        if (ch._1 == '#') input.charAt(ch._2) else '#'
-      } else {
-        ch._1
-      }
+  def mutation(initialRule: Classifier, input: String, availableActions: Array[Boolean] = Array(true, false)): Classifier = {
+    val newCondition = initialRule.condition.zipWithIndex.map { ch =>
+      if (Random.nextDouble() < mutationProbability) if (ch._1 == '#') input.charAt(ch._2) else '#' else ch._1
     }.mkString
 
-    initialRule.copy(condition = newCondition)
+    initialRule.copy(
+      condition = newCondition,
+      action = if (Random.nextDouble() < mutationProbability) {
+        availableActions(Random.nextInt(availableActions.length))
+      } else {
+        initialRule.action
+      }
+    )
   }
 
   // Utils
@@ -419,58 +403,38 @@ case class XCS(
     }.toArray
   }
 
-  def selectAction(predictions: Array[Prediction], explore: Boolean = false): Boolean = {
-    if (explore) {
-      val keys = predictions.map(_.action)
-      keys(Random.nextInt(keys.length))
-    } else {
-      predictions.maxBy(_.weight).action
-    }
+  def selectAction(predictions: Array[Prediction], explore: Boolean = false): Boolean = if (explore) {
+    val keys = predictions.map(_.action)
+    keys(Random.nextInt(keys.length))
+  } else {
+    predictions.maxBy(_.weight).action
   }
 
-
-  def train(): Unit = {
-    val performance: ArrayBuffer[Performance] = ArrayBuffer.empty
-
-    val positiveReward = 100.0
-    val negativeReward = 0.0
-    val possibleActions = Array(true, false)
-
+  def train(positiveReward: Double = 100.0, negativeReward: Double = 0.0): Unit = {
     0 until trainSetSize foreach { generation =>
       val explore = generation % explorationRate == 0
+
       val input = multiplexers.generateRandomMultiplexerSignal
       val correctAction = multiplexers.targetFunction(input)
 
-      val matchSet = getMatchSet(input, possibleActions, generation)
-      val prediction = getPredictions(matchSet)
-      val selectedAction = selectAction(prediction)
+      val matchSet = generateMatchSet(input, correctAction, generation)
+      val predictions = getPredictions(matchSet)
+      val predictedAction = selectAction(predictions, explore)
+
+      val (mReward, nmReward) = if (predictedAction == correctAction) {
+        (positiveReward, negativeReward)
+      } else {
+        (negativeReward, positiveReward)
+      }
 
       if (explore) {
-        //val (set1, set2) = matchSet.groupBy(_.action)
+        val (chosenSet, notChosenSet) = matchSet.partition(_.action == predictedAction)
 
-        /*val grouped = matchSet.groupBy(_.action)
+        updateSet(chosenSet, mReward)
+        updateSet(notChosenSet, nmReward)
 
-        val (correct, incorrect) = if (selectedAction == correctAction) {
-          (grouped.getOrElse(selectedAction, ArrayBuffer.empty), grouped.getOrElse(!selectedAction, ArrayBuffer.empty))
-        } else {
-          (grouped.getOrElse(!selectedAction, ArrayBuffer.empty), grouped.getOrElse(selectedAction, ArrayBuffer.empty))
-        }
-
-        updateSet(correct, positiveReward)
-        updateSet(incorrect, negativeReward)*/
-
-        population
-
-        updateSet(matchSet, if (selectedAction == correctAction) positiveReward else negativeReward)
-
-        if (canRunGa(generation, matchSet)) {
-          runGa(input, generation, matchSet)
-        }
-      } /*else {
-        performance.append(Performance(
-          Math.abs
-        ))
-      }*/
+        if (canRunGa(generation, matchSet)) runGa(input, generation, chosenSet)
+      }
     }
   }
 
