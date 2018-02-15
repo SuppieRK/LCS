@@ -1,39 +1,39 @@
-package io.suppie.lcs.another
+package io.suppie.lcs
 
 import java.text.NumberFormat
 
-import io.suppie.lcs.MultiplexerProvider
-import io.suppie.lcs.another.Entities._
-import io.suppie.lcs.another.GeneticEntities._
+import io.suppie.lcs.Entities._
+import io.suppie.lcs.GeneticEntities._
 
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Random, Try}
 
-case class AnotherXCS(
-                       multiplexerSize: Int = 4,
-                       populationSize: Int = 200,
-                       trainingIterations: Int = 40000,
-                       testingIterations: Int = 10000,
-                       performanceReportFrequency: Int = 200,
-                       deletionThreshold: Double = 20.0,
-                       fitnessThreshold: Double = 0.1,
-                       newClassifierWildcardAppearanceRate: Double = 1.0 / 3.0,
-                       beta: Double = 0.2,
-                       minError: Double = 10.0,
-                       learningRate: Double = 0.2,
-                       alpha: Double = 0.1,
-                       v: Double = -5.0,
-                       geneticAlgorithmFrequency: Double = 50.0,
-                       firstParentSelectionStrategy: Selection = TournamentSelection(),
-                       secondParentSelectionStrategy: SecondParentSelection = Panmixic,
-                       crossoverStrategy: CrossoverType = UniformCrossover,
-                       crossoverPredictionDecay: Double = 2.0,
-                       crossoverErrorDecay: Double = 0.125,
-                       crossoverFitnessDecay: Double = 0.05,
-                       mutationProbability: Double = 0.04,
-                       crate: Double = 0.8,
-                       explorationFrequency: Int = 2
-                     ) {
+case class Xcs(
+                multiplexerSize: Int = 4,
+                populationSize: Int = 200,
+                trainingIterations: Int = 40000,
+                testingIterations: Int = 10000,
+                performanceReportFrequency: Int = 200,
+                experienceThreshold: Double = 20.0,
+                fitnessThreshold: Double = 0.1,
+                newClassifierWildcardAppearanceRate: Double = 1.0 / 3.0,
+                beta: Double = 0.2,
+                minError: Double = 10.0,
+                learningRate: Double = 0.2,
+                alpha: Double = 0.1,
+                v: Double = -5.0,
+                geneticAlgorithmFrequency: Double = 50.0,
+                firstParentSelectionStrategy: Selection = TournamentSelection(),
+                secondParentSelectionStrategy: SecondParentSelection = Panmixic,
+                crossoverStrategy: CrossoverType = UniformCrossover,
+                crossoverPredictionDecay: Double = 2.0,
+                crossoverErrorDecay: Double = 0.125,
+                crossoverFitnessDecay: Double = 0.05,
+                mutationProbability: Double = 0.04,
+                crate: Double = 0.8,
+                explorationFrequency: Int = 2,
+                verbose: Boolean = false
+              ) {
   final val CoinFlipProbability: Double = 0.5
 
   val multiplexers = MultiplexerProvider(multiplexerSize)
@@ -59,7 +59,7 @@ case class AnotherXCS(
         val avgFitness = population.map(_.fitness / total).sum
         val derated = classifier.fitness / classifier.numerosity
 
-        if (classifier.experience > deletionThreshold && derated < fitnessThreshold * avgFitness) {
+        if (classifier.experience > experienceThreshold && derated < fitnessThreshold * avgFitness) {
           vote * (avgFitness / derated)
         } else {
           vote
@@ -168,7 +168,6 @@ case class AnotherXCS(
     }.foreach(e => e._1.fitness = e._1.fitness + learningRate * ((e._2 * e._1.numerosity) / sum - e._1.fitness))
   }
 
-  // TODO finish implementation
   // Genetic operations
   // Panmictic selection
   def rouletteWheelSelection(classifiers: ArrayBuffer[Classifier]): Classifier = {
@@ -369,7 +368,7 @@ case class AnotherXCS(
       if (explore) {
         updateClassifiers(matchingClassifiers.filter(rule => predictedAction.isDefined && rule.action == predictedAction.get), reward)
         runGeneticAlgorithm(matchingClassifiers, generation, input)
-      } else {
+      } else if (verbose) {
         performance.append(Performance(
           error = Math.abs(predictions.maxBy(_.weight).weight - reward),
           correct = if (predictedAction.isDefined && correctAction == predictedAction.get) 1 else 0
@@ -401,7 +400,7 @@ case class AnotherXCS(
       }
     }.sum.toDouble / trainingIterations.toDouble
 
-    println(s"Classified correctly ${result.asPercentage} instances")
+    if (verbose) println(s"Classified correctly ${result.asPercentage} instances")
 
     result
   }
@@ -410,11 +409,4 @@ case class AnotherXCS(
     def asPercentage: String = NumberFormat.getPercentInstance.format(d)
   }
 
-}
-
-
-object XcsTest extends App {
-  val test = AnotherXCS()
-  test.trainModel()
-  test.testModel()
 }

@@ -1,4 +1,4 @@
-package io.suppie.lcs.another
+package io.suppie.lcs
 
 object Entities {
 
