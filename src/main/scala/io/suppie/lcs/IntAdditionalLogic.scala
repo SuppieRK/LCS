@@ -1,6 +1,7 @@
 package io.suppie.lcs
 
 trait IntAdditionalLogic {
+
   implicit class IntAddLogic(i: Int) {
     /**
       * Simple int to boolean conversion
@@ -71,4 +72,5 @@ trait IntAdditionalLogic {
       // EXAMPLE: 00000111 -> 7
     }
   }
+
 }

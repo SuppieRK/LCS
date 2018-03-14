@@ -4,11 +4,15 @@ object GeneticEntities {
 
   trait Selection
 
+  trait SecondParentSelection
+
+  trait CrossoverType
+
   case class TournamentSelection(size: Int = 2) extends Selection
 
-  case object RouletteWheelSelection extends Selection
+  case class NPointCrossover(n: Int = 2) extends CrossoverType
 
-  trait SecondParentSelection
+  case object RouletteWheelSelection extends Selection
 
   case object Panmixic extends SecondParentSelection
 
@@ -20,11 +24,7 @@ object GeneticEntities {
 
   case object GenotypeOutbreeding extends SecondParentSelection
 
-  trait CrossoverType
-
   case object OnePointCrossover extends CrossoverType
-
-  case class NPointCrossover(n: Int = 2) extends CrossoverType
 
   case object UniformCrossover extends CrossoverType
 

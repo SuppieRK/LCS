@@ -33,8 +33,6 @@ case class MultiplexerProvider(multiplexerOrder: Int = 4) extends IntAdditionalL
     createMultiplexers(multiplexerOrder).zipWithIndex.map(e => multiply(e._1, e._2, input)).reduceLeft(_ | _).toBoolean
   }
 
-  private def not(ch: Char): Char = if (ch == '0') '1' else '0'
-
   /**
     * Calculated parts of the boolean multiplexer equation
     *
@@ -50,6 +48,8 @@ case class MultiplexerProvider(multiplexerOrder: Int = 4) extends IntAdditionalL
       input(i + muxIdx).toBoolInt
     }
   }.reduceLeft(_ & _)
+
+  private def not(ch: Char): Char = if (ch == '0') '1' else '0'
 
   /**
     * Creation of the multiplexer arguments
