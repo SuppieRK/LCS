@@ -171,7 +171,12 @@ case class Xcs(
   // Panmictic selection
   def rouletteWheelSelection(classifiers: ArrayBuffer[Classifier]): Classifier = {
     val totalFitness: Double = population.map(_.fitness).sum
-    population.maxBy(_.fitness / totalFitness)
+
+    val point: Double = rng.nextDouble()
+
+    population.map(c => (c, c.fitness / totalFitness))
+      .find(_._2 > point).map(_._1)
+      .getOrElse(population.maxBy(_.fitness / totalFitness))
   }
 
   // Preferred
