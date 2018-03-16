@@ -111,7 +111,7 @@ case class Xcs(
     var sum = 0.0
 
     classifiers.map { rule =>
-      val result = if (rule.error < minError) 1.0 else Math.pow(alpha * (rule.error / minError), v)
+      val result = if (rule.error < minError) 1.0 else alpha * Math.pow(rule.error / minError, v)
       sum = sum + result * rule.numerosity
       (rule, result)
     }.foreach(e => e._1.fitness = e._1.fitness + learningRate * ((e._2 * e._1.numerosity) / sum - e._1.fitness))
