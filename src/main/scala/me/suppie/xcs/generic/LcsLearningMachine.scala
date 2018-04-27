@@ -2,6 +2,9 @@ package me.suppie.xcs.generic
 
 import java.util.{Random => JRandom}
 
+import me.suppie.xcs.generic.contracts.impl.DefaultCoveringMechanism
+import me.suppie.xcs.generic.contracts.{CoveringMechanism, LcsEnvironment, PopulationManager}
+
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
 
@@ -16,8 +19,10 @@ import scala.util.Random
   */
 case class LcsLearningMachine[ES, A](
                                       environment: LcsEnvironment[ES, A],
+                                      populationManager: PopulationManager[A],
+                                      coveringMechanism: CoveringMechanism[A] = DefaultCoveringMechanism(),
                                       populationSize: Int = 200
-                                    ) extends LcsConstants {
+                                    ) {
   private val rng = Random.javaRandomToRandom(new JRandom(System.currentTimeMillis()))
 
   private val rulePopulation = {

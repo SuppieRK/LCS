@@ -3,7 +3,7 @@ package me.suppie.xcs.another
 import java.util.{Random => JRandom}
 
 import me.suppie.xcs.Entities.Rule
-import me.suppie.xcs.generic.RuleInterpreter
+import me.suppie.xcs.generic.contracts.RuleInterpreter
 
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random

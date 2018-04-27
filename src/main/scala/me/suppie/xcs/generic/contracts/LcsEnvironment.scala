@@ -1,4 +1,4 @@
-package me.suppie.xcs.generic
+package me.suppie.xcs.generic.contracts
 
 /**
   * Representation of the external environment
