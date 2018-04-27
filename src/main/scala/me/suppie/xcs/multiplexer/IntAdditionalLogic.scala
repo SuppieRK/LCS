@@ -1,4 +1,4 @@
-package io.suppie.lcs
+package me.suppie.xcs.multiplexer
 
 trait IntAdditionalLogic {
 

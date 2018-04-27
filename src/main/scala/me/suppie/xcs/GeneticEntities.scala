@@ -1,5 +1,8 @@
-package io.suppie.lcs
+package me.suppie.xcs
 
+/**
+  * This object contains common operations for GA
+  */
 object GeneticEntities {
 
   trait Selection

@@ -1,13 +1,42 @@
-package io.suppie.lcs
+package me.suppie.xcs
 
 import java.text.NumberFormat
 
-import io.suppie.lcs.Entities._
-import io.suppie.lcs.GeneticEntities._
+import me.suppie.xcs.Entities._
+import me.suppie.xcs.GeneticEntities._
+import me.suppie.xcs.multiplexer.MultiplexerProvider
 
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Random, Try}
 
+/**
+  * Classic eXtended Classifier System implementation (for multiplexer problem)
+  *
+  * @param multiplexerSize
+  * @param populationSize
+  * @param trainingIterations
+  * @param testingIterations
+  * @param performanceReportFrequency
+  * @param experienceThreshold
+  * @param fitnessThreshold
+  * @param newClassifierWildcardAppearanceRate
+  * @param beta
+  * @param minError
+  * @param learningRate
+  * @param alpha
+  * @param v
+  * @param geneticAlgorithmFrequency
+  * @param firstParentSelectionStrategy
+  * @param secondParentSelectionStrategy
+  * @param crossoverStrategy
+  * @param crossoverPredictionDecay
+  * @param crossoverErrorDecay
+  * @param crossoverFitnessDecay
+  * @param mutationProbability
+  * @param crate
+  * @param explorationFrequency
+  * @param verbose
+  */
 case class Xcs(
                 multiplexerSize: Int = 4,
                 populationSize: Int = 200,
@@ -34,6 +63,8 @@ case class Xcs(
                 explorationFrequency: Int = 2,
                 verbose: Boolean = false
               ) {
+  // @TODO subsumption mechanism
+
   final val CoinFlipProbability: Double = 0.5
 
   val multiplexers = MultiplexerProvider(multiplexerSize)

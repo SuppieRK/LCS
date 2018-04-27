@@ -1,5 +1,8 @@
-package io.suppie.lcs
+package me.suppie.xcs
 
+/**
+  * Here defined common entities, used during work
+  */
 object Entities {
 
   case class Performance(
