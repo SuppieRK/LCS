@@ -71,7 +71,7 @@ case class Xcs(
 
   val rng: Random = Random.javaRandomToRandom(new java.util.Random(System.currentTimeMillis()))
 
-  val population: ArrayBuffer[Classifier] = ArrayBuffer.empty
+  val population: ArrayBuffer[Rule] = ArrayBuffer.empty
   population.sizeHint(populationSize)
 
   def trainModel(): Unit = {
@@ -93,7 +93,7 @@ case class Xcs(
       val reward = if (predictedAction.isDefined && correctAction == predictedAction.get) positiveReward else negativeReward
 
       if (explore) {
-        updateClassifiers(matchingClassifiers.filter(rule => predictedAction.isDefined && rule.action == predictedAction.get), reward)
+        updateClassifiers(matchingClassifiers.filter(rule => predictedAction.isDefined && rule.endpoint == predictedAction.get), reward)
         runGeneticAlgorithm(matchingClassifiers, generation, input)
       } else if (verbose) {
         performance.append(Performance(
@@ -113,7 +113,7 @@ case class Xcs(
     }
   }
 
-  def updateClassifiers(classifiers: ArrayBuffer[Classifier], reward: Double): Unit = if (classifiers.nonEmpty) {
+  def updateClassifiers(classifiers: ArrayBuffer[Rule], reward: Double): Unit = if (classifiers.nonEmpty) {
     val numerositySum = classifiers.map(_.numerosity).sum
 
     classifiers.foreach { rule =>
@@ -148,7 +148,7 @@ case class Xcs(
     }.foreach(e => e._1.fitness = e._1.fitness + learningRate * ((e._2 * e._1.numerosity) / sum - e._1.fitness))
   }
 
-  def runGeneticAlgorithm(classifiers: ArrayBuffer[Classifier], generation: Int, input: String): Unit = if (classifiers.length > 2) {
+  def runGeneticAlgorithm(classifiers: ArrayBuffer[Rule], generation: Int, input: String): Unit = if (classifiers.length > 2) {
     val total = classifiers.map(r => r.generation * r.numerosity).sum
     val sum = classifiers.map(_.numerosity).sum
 
@@ -191,8 +191,8 @@ case class Xcs(
     }
   }
 
-  def insertIntoPopulation(classifier: Classifier): Unit = {
-    population.find(rule => rule.condition == classifier.condition && rule.action == classifier.action) match {
+  def insertIntoPopulation(classifier: Rule): Unit = {
+    population.find(rule => rule.attributes == classifier.attributes && rule.endpoint == classifier.endpoint) match {
       case Some(r) => r.numerosity = r.numerosity + 1
       case None => population.append(classifier)
     }
@@ -200,7 +200,7 @@ case class Xcs(
 
   // Genetic operations
   // Panmictic selection
-  def rouletteWheelSelection(classifiers: ArrayBuffer[Classifier]): Classifier = {
+  def rouletteWheelSelection(classifiers: ArrayBuffer[Rule]): Rule = {
     val totalFitness: Double = population.map(_.fitness).sum
 
     val point: Double = rng.nextDouble()
@@ -212,41 +212,41 @@ case class Xcs(
 
   // Preferred
   // Tournament selection
-  def tournamentSelection(classifiers: ArrayBuffer[Classifier], tournamentSize: Int = 2): Classifier = {
+  def tournamentSelection(classifiers: ArrayBuffer[Rule], tournamentSize: Int = 2): Rule = {
     Random.shuffle(classifiers.indices.toList).take(tournamentSize).map(idx => classifiers(idx)).maxBy(_.fitness)
   }
 
   // Phenotype inbreeding for second parent selection
-  def getSecondParentPhIn(classifiers: ArrayBuffer[Classifier], firstParent: Classifier): Classifier = {
+  def getSecondParentPhIn(classifiers: ArrayBuffer[Rule], firstParent: Rule): Rule = {
     phenotypeSimilarity(classifiers, firstParent).minBy(_._2)._1
   }
 
   // Additional selection operators
-  def phenotypeSimilarity(classifiers: ArrayBuffer[Classifier], firstParent: Classifier): ArrayBuffer[(Classifier, Double)] = {
+  def phenotypeSimilarity(classifiers: ArrayBuffer[Rule], firstParent: Rule): ArrayBuffer[(Rule, Double)] = {
     classifiers.filterNot(_ == firstParent).map(c => (c, Math.abs(c.fitness - firstParent.fitness)))
   }
 
   // Genotype inbreeding for second parent selection
-  def getSecondParentGeIn(classifiers: ArrayBuffer[Classifier], firstParent: Classifier): Classifier = {
+  def getSecondParentGeIn(classifiers: ArrayBuffer[Rule], firstParent: Rule): Rule = {
     genotypeSimilarity(classifiers, firstParent).maxBy(_._2)._1
   }
 
   // Phenotype outbreeding for second parent selection
-  def getSecondParentPhOut(classifiers: ArrayBuffer[Classifier], firstParent: Classifier): Classifier = {
+  def getSecondParentPhOut(classifiers: ArrayBuffer[Rule], firstParent: Rule): Rule = {
     phenotypeSimilarity(classifiers, firstParent).maxBy(_._2)._1
   }
 
   // Genotype outbreeding for second parent selection
-  def getSecondParentGeOut(classifiers: ArrayBuffer[Classifier], firstParent: Classifier): Classifier = {
+  def getSecondParentGeOut(classifiers: ArrayBuffer[Rule], firstParent: Rule): Rule = {
     genotypeSimilarity(classifiers, firstParent).minBy(_._2)._1
   }
 
-  def genotypeSimilarity(classifiers: ArrayBuffer[Classifier], firstParent: Classifier): ArrayBuffer[(Classifier, Double)] = {
+  def genotypeSimilarity(classifiers: ArrayBuffer[Rule], firstParent: Rule): ArrayBuffer[(Rule, Double)] = {
     classifiers.filterNot(_ == firstParent).map { c =>
-      (c, c.condition.zipWithIndex.map { ch =>
-        if (ch._1 == firstParent.condition.charAt(ch._2)) {
+      (c, c.attributes.zipWithIndex.map { ch =>
+        if (ch._1 == firstParent.attributes.charAt(ch._2)) {
           1.0
-        } else if (ch._1 == '#' || firstParent.condition.charAt(ch._2) == '#') {
+        } else if (ch._1 == '#' || firstParent.attributes.charAt(ch._2) == '#') {
           0.5
         } else {
           0.0
@@ -256,7 +256,7 @@ case class Xcs(
   }
 
   // Crossover
-  def crossover(firstParent: Classifier, secondParent: Classifier, generation: Int): (Classifier, Classifier) = {
+  def crossover(firstParent: Rule, secondParent: Rule, generation: Int): (Rule, Rule) = {
     val (oCondition1, oCondition2) = crossoverStrategy match {
       case OnePointCrossover => onePointCrossover(firstParent, secondParent)
       case NPointCrossover(n) => nPointCrossover(n, firstParent, secondParent)
@@ -269,14 +269,14 @@ case class Xcs(
 
     (
       firstParent.copy(
-        condition = oCondition1,
+        attributes = oCondition1,
         generation = generation,
         prediction = prediction,
         error = error,
         fitness = fitness
       ),
       secondParent.copy(
-        condition = oCondition2,
+        attributes = oCondition2,
         generation = generation,
         prediction = prediction,
         error = error,
@@ -287,29 +287,29 @@ case class Xcs(
 
   // Preferred
   // Uniform crossover
-  def uniformCrossover(firstParent: Classifier, secondParent: Classifier): String = {
-    firstParent.condition.zipWithIndex.map { ch =>
-      if (rng.nextDouble() < CoinFlipProbability) ch._1 else secondParent.condition.charAt(ch._2)
+  def uniformCrossover(firstParent: Rule, secondParent: Rule): String = {
+    firstParent.attributes.zipWithIndex.map { ch =>
+      if (rng.nextDouble() < CoinFlipProbability) ch._1 else secondParent.attributes.charAt(ch._2)
     }.mkString
   }
 
   // One point crossover
-  def onePointCrossover(firstParent: Classifier, secondParent: Classifier): (String, String) = {
-    val point = rng.nextInt(firstParent.condition.length)
+  def onePointCrossover(firstParent: Rule, secondParent: Rule): (String, String) = {
+    val point = rng.nextInt(firstParent.attributes.length)
 
     (
-      firstParent.condition.take(point) + secondParent.condition.drop(point),
-      secondParent.condition.take(point) + firstParent.condition.drop(point)
+      firstParent.attributes.take(point) + secondParent.attributes.drop(point),
+      secondParent.attributes.take(point) + firstParent.attributes.drop(point)
     )
   }
 
   // N point crossover
-  def nPointCrossover(n: Int, firstParent: Classifier, secondParent: Classifier): (String, String) = {
-    if (n >= firstParent.condition.length) {
+  def nPointCrossover(n: Int, firstParent: Rule, secondParent: Rule): (String, String) = {
+    if (n >= firstParent.attributes.length) {
       (uniformCrossover(firstParent, secondParent), uniformCrossover(firstParent, secondParent))
     } else {
-      val bounds = List(0, firstParent.condition.length)
-      val indicesToShuffle = firstParent.condition.indices.filterNot(bounds.contains)
+      val bounds = List(0, firstParent.attributes.length)
+      val indicesToShuffle = firstParent.attributes.indices.filterNot(bounds.contains)
       val shuffledIndices = (rng.shuffle(indicesToShuffle.toList).take(n) ++ bounds).sorted
 
       var fCondition = ""
@@ -317,11 +317,11 @@ case class Xcs(
 
       0 until (shuffledIndices.size - 1) foreach { i =>
         if (rng.nextDouble() < CoinFlipProbability) {
-          fCondition = fCondition + firstParent.condition.substring(shuffledIndices(i), shuffledIndices(i + 1))
-          sCondition = sCondition + secondParent.condition.substring(shuffledIndices(i), shuffledIndices(i + 1))
+          fCondition = fCondition + firstParent.attributes.substring(shuffledIndices(i), shuffledIndices(i + 1))
+          sCondition = sCondition + secondParent.attributes.substring(shuffledIndices(i), shuffledIndices(i + 1))
         } else {
-          sCondition = sCondition + firstParent.condition.substring(shuffledIndices(i), shuffledIndices(i + 1))
-          fCondition = fCondition + secondParent.condition.substring(shuffledIndices(i), shuffledIndices(i + 1))
+          sCondition = sCondition + firstParent.attributes.substring(shuffledIndices(i), shuffledIndices(i + 1))
+          fCondition = fCondition + secondParent.attributes.substring(shuffledIndices(i), shuffledIndices(i + 1))
         }
       }
 
@@ -330,12 +330,12 @@ case class Xcs(
   }
 
   // Mutation
-  def mutation(classifier: Classifier, input: String): Classifier = {
+  def mutation(classifier: Rule, input: String): Rule = {
     classifier.copy(
-      condition = classifier.condition.zipWithIndex.map { ch =>
+      attributes = classifier.attributes.zipWithIndex.map { ch =>
         if (rng.nextDouble() < mutationProbability) if (ch._1 == '#') input.charAt(ch._2) else '#' else ch._1
       }.mkString,
-      action = if (rng.nextDouble() < mutationProbability) !classifier.action else classifier.action
+      endpoint = if (rng.nextDouble() < mutationProbability) !classifier.endpoint else classifier.endpoint
     )
   }
 
@@ -358,13 +358,13 @@ case class Xcs(
     result
   }
 
-  def getMatchingClassifiers(input: String, generation: Int, training: Boolean = false): ArrayBuffer[Classifier] = {
+  def getMatchingClassifiers(input: String, generation: Int, training: Boolean = false): ArrayBuffer[Rule] = {
     val matchingClassifiers = population.filter(rule => doesMatch(input, rule))
 
     if (matchingClassifiers.isEmpty && training) {
-      val newClassifier = Classifier(
-        condition = input.map(ch => if (rng.nextDouble() < newClassifierWildcardAppearanceRate) '#' else ch).mkString,
-        action = multiplexers.targetFunction(input),
+      val newClassifier = Rule(
+        attributes = input.map(ch => if (rng.nextDouble() < newClassifierWildcardAppearanceRate) '#' else ch).mkString,
+        endpoint = multiplexers.targetFunction(input),
         generation = generation
       )
 
@@ -380,7 +380,7 @@ case class Xcs(
     val total = population.map(_.numerosity).sum
 
     if (total > populationSize) {
-      def getDeletionVote(classifier: Classifier): Double = {
+      def getDeletionVote(classifier: Rule): Double = {
         val vote = classifier.setSize * classifier.numerosity
         val avgFitness = population.map(_.fitness / total).sum
         val derated = classifier.fitness / classifier.numerosity
@@ -416,12 +416,12 @@ case class Xcs(
     }
   }
 
-  def doesMatch(input: String, classifier: Classifier): Boolean = {
-    input.zipWithIndex.forall(e => classifier.condition.charAt(e._2) == '#' || classifier.condition.charAt(e._2) == e._1)
+  def doesMatch(input: String, classifier: Rule): Boolean = {
+    input.zipWithIndex.forall(e => classifier.attributes.charAt(e._2) == '#' || classifier.attributes.charAt(e._2) == e._1)
   }
 
-  def getPredictions(matchingClassifiers: ArrayBuffer[Classifier]): Array[Prediction] = if (matchingClassifiers.nonEmpty) {
-    matchingClassifiers.groupBy(_.action).map { e =>
+  def getPredictions(matchingClassifiers: ArrayBuffer[Rule]): Array[Prediction] = if (matchingClassifiers.nonEmpty) {
+    matchingClassifiers.groupBy(_.endpoint).map { e =>
       val count = e._2.map(_.fitness).sum
       val sum = e._2.map(_.prediction).sum * count
       val weight = if (count > 0) sum / count else 0.0
