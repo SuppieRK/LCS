@@ -31,4 +31,5 @@ case class LcsLearningMachine[ES, A](
     result
   }
 
+
 }
